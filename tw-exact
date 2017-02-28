@@ -1,0 +1,3 @@
+#!/bin/sh
+#
+java -Xmx30g -Xms30g -Xss10m tw.exact.MainDecomposer
