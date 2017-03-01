@@ -1,2 +1,18 @@
 For PACE 2017 submissions
-will be made public on final submission
+
+For the preliminary submission, this repository is kept private.
+On the final submission, it will be made public, with a License file added.
+
+This repository contains both exact and heuristic submissions.
+
+Usage: 
+$ make exact
+for making the exact submission
+$ make heuristic
+for making the heuristic submission, or
+$ make
+for making both
+
+The commands are tw-exact and tw-heuristic as specified by the challenge rule.
+
+
