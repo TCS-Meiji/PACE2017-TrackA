@@ -3,6 +3,7 @@ package tw.exact;
 import java.io.File;
 
 
+
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
@@ -59,12 +60,9 @@ public class MainDecomposer {
       graphs[i].inheritEdges(g, conv, invs[i]);
     }
 
-    TreeDecomposition td = decomposeConnected(graphs[0]);
-    if (td == null) {
-      return null;
-    }
+    TreeDecomposition td = new TreeDecomposition(0, 0, g);
     
-    for (int i = 1; i < nc; i++) {
+    for (int i = 0; i < nc; i++) {
       TreeDecomposition td1 = decomposeConnected(graphs[i]);
       if (td1 == null) {
         return null;
