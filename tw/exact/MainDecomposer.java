@@ -24,6 +24,10 @@ public class MainDecomposer {
 
   public static TreeDecomposition decompose(Graph g) {
     log("decompose n = " + g.n);
+    if (g.n == 0) {
+      TreeDecomposition td = new TreeDecomposition(0, -1, g);
+      return td;
+    }
 
     ArrayList<XBitSet> components = g.getComponents(new XBitSet());
     
