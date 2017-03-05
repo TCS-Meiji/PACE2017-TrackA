@@ -11,6 +11,7 @@ import java.util.HashSet;
 
 public class SafeSeparator {
   private static int MAX_MISSINGS = 100;
+  private static int DEFAULT_MAX_STEPS = 1000000;
   private static final boolean CONFIRM_MINOR = true;
 //  private static final boolean CONFIRM_MINOR = false;
 //    private static final boolean DEBUG = true;
@@ -18,6 +19,8 @@ public class SafeSeparator {
 
   Graph g;
 
+  int maxSteps;
+  int steps;
   LeftNode[] leftNodes;
   ArrayList<RightNode> rightNodeList;
   ArrayList<MissingEdge> missingEdgeList;
@@ -28,7 +31,13 @@ public class SafeSeparator {
   }
 
   public boolean isSafeSeparator(XBitSet separator) {
+    return isSafeSeparator(separator, DEFAULT_MAX_STEPS);
+  }
+  
+  public boolean isSafeSeparator(XBitSet separator, int maxSteps) {
     //  System.out.println("isSafeSeparator " + separator);
+    this.maxSteps = maxSteps;
+    steps = 0;
     ArrayList<XBitSet> components = g.getComponents(separator);
     if (components.size() == 1) {
 //      System.err.println("non separator for safety testing:" + separator);
@@ -250,6 +259,10 @@ public class SafeSeparator {
     }
 
     while (true) {
+      steps++;
+      if (steps > maxSteps) {
+        return null;
+      }
       MissingEdge zc = zeroCovered();
       if (zc == null) {
         break;
@@ -265,6 +278,10 @@ public class SafeSeparator {
     
     boolean moving = true;
     while (rightNodeList.size() > k/2 && moving) {
+      steps++;
+      if (steps > maxSteps) {
+        return null;
+      }
       moving = false;
       MissingEdge lc = leastCovered();
       if (lc == null) {
@@ -332,6 +349,10 @@ public class SafeSeparator {
           if (rn.assignedTo != null ||
               !rn.neighborSet.get(ln.vertex)) {
             continue;
+          }
+          steps++;
+          if (steps > maxSteps) {
+            return null;
           }
           rn.assignedTo = ln;
           int minCover = minCover();
