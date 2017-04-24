@@ -6,20 +6,22 @@ import java.util.Map;
 import java.util.HashMap;
 
 public class Bag implements Cloneable{
-	public Bag parent;
+	Bag parent;
 	VertexSet vertexSet;
-	public int size;
-	public Graph graph;
+	int size;
+	Graph graph;
 	int conv[];
 	int inv[];
-	public ArrayList<Bag> nestedBags;
-	public ArrayList<Separator> separators;
-	public ArrayList<Separator> incidentSeparators;
+	ArrayList<Bag> nestedBags;
+	ArrayList<Separator> separators;
+	ArrayList<Separator> incidentSeparators;
 	int width;
 	int separatorWidth;
 	int lowerBound;
 	int inheritedLowerBound;
-	public boolean optimal; 
+	boolean optimal; 
+
+  static final boolean DEBUG = false;
 
 	public Bag(Graph graph) {
 		this(null, graph.all);
@@ -447,6 +449,10 @@ public class Bag implements Cloneable{
 	}
 
 	public void validate() {
+    if(!DEBUG){
+      return;
+    }
+
 		if (nestedBags != null) {
 			//      assert !nestedBags.isEmpty() : "no nested bags " + this; 
 			for (Bag b: nestedBags) {

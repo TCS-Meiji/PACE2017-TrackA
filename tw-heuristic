@@ -1,3 +1,29 @@
-#!/bin/sh
+#!/bin/bash
 
-java -Xmx30g -Xms30g -Xss10m tw.heuristic.MainDecomposer
+JFLAGS="-Xmx30g -Xms30g -Xss1g"
+
+tmp="/tmp/tmp_input"
+trap 'rm -f $tmp' EXIT
+cat > $tmp
+
+seed=42
+while getopts s: OPT
+do
+  case $OPT in
+    s)
+      seed=$OPTARG
+      ;;
+  esac
+done
+
+java $JFLAGS tw.heuristic.MainDecomposer -s $seed < $tmp &
+
+PID=$!
+trap 'kill -SIGTERM $PID' SIGTERM
+trap 'kill -SIGKILL -- -$PID &> /dev/null; rm -f $tmp' EXIT
+
+while :
+do
+  wait $PID
+  kill -0 $PID 2> /dev/null || break
+done

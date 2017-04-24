@@ -2,7 +2,7 @@ package tw.heuristic;
 
 public class VertexSet
 implements Comparable< VertexSet >, Cloneable{
-  private static int TH1 = -1;
+  private int TH1 = 256;
   public static enum Type{
     ARRAYSET, XBITSET
   };
@@ -10,25 +10,24 @@ implements Comparable< VertexSet >, Cloneable{
   private ArraySet arrayset;
   private Type type = Type.ARRAYSET;
 
-  public static void setTH(int th){
-    if(TH1 < 0 && th >= 0){
-      TH1 = th;
-    }
-  }
-
   public VertexSet(){
     arrayset = new ArraySet();
-    assert(TH1 >= 0);
   }
 
   public VertexSet(int n){
     this();
-    assert(TH1 >= 0);
+    TH1 = n / 100;
   }
 
   public VertexSet(int n, int[] a){
-    this(a);
-    assert(TH1 >= 0);
+    TH1 = n / 100;
+    if(a.length <= TH1){
+      arrayset = new ArraySet(a);
+    }
+    else{
+      type = Type.XBITSET;
+      xbitset = new XBitSet(a);
+    }
   }
 
   public VertexSet(int[] a){
@@ -39,20 +38,17 @@ implements Comparable< VertexSet >, Cloneable{
       type = Type.XBITSET;
       xbitset = new XBitSet(a);
     }
-    assert(TH1 >= 0);
   }
 
   private VertexSet(ArraySet as){
     arrayset = as;
     ensureType();
-    assert(TH1 >= 0);
   }
 
   private VertexSet(XBitSet xbs){
     xbitset = xbs;
     type = Type.XBITSET;
     ensureType();
-    assert(TH1 >= 0);
   }
 
   private void toArraySet(){
@@ -248,12 +244,19 @@ implements Comparable< VertexSet >, Cloneable{
 
   @Override
     public int hashCode(){
+      int hash = 1;
       if(type == Type.ARRAYSET){
-        return arrayset.hashCode();
+        for(int i = 0; i < arrayset.size; i++){
+          hash = 31 * hash + arrayset.a[i];
+        }
       }
       else{
-        return xbitset.hashCode();
+        for(int i = xbitset.nextSetBit(0);
+          i >= 0; i = xbitset.nextSetBit(i + 1)){
+          hash = 31 * hash + i;
+        }
       }
+      return hash;
     }
 
   public boolean hasSmaller(VertexSet set){

@@ -1,12 +1,7 @@
 package tw.heuristic;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 
 public class SafeSeparator {
   private static int MAX_MISSINGS = 100;
@@ -21,13 +16,27 @@ public class SafeSeparator {
   ArrayList<RightNode> rightNodeList;
   ArrayList<MissingEdge> missingEdgeList;
   VertexSet available;
-  
+
   public SafeSeparator (Graph g) {
     this.g = g;
   }
 
   public boolean isSafeSeparator(VertexSet separator) {
     //  System.out.println("isSafeSeparator " + separator);
+    if(separator.cardinality() <= 2){
+      return true;
+    }
+    if(separator.cardinality() == 3){
+      int first = separator.nextSetBit(0);
+      VertexSet s = g.neighborSet[first];
+      if(s.intersects(separator)){
+        return true;
+      }
+      s = g.neighborSet[separator.nextSetBit(first)];
+      if(s.intersects(separator)){
+        return true;
+      }
+    }
     ArrayList<VertexSet> components = g.getComponents(separator);
     if (components.size() == 1) {
       System.err.println("non separator for safety testing:" + separator);
@@ -61,7 +70,7 @@ public class SafeSeparator {
       this.vertex = vertex;
       //      rightNeighborList = new ArrayList<>();
     }
-    
+
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append("left" + index + "(" + vertex + "):");
@@ -87,9 +96,9 @@ public class SafeSeparator {
       this.vertexSet = vertexSet;
       neighborSet = g.neighborSet(vertexSet);
     }
-    
+
     boolean potentiallyCovers(MissingEdge me) {
-      return 
+      return
           assignedTo == null &&
           neighborSet.get(me.left1.vertex) &&
           neighborSet.get(me.left2.vertex);
@@ -145,14 +154,14 @@ public class SafeSeparator {
             if (!rn2.neighborSet.get(left1.vertex) &&
                 rn2.neighborSet.get(left2.vertex) &&
                 connectable(rn1.vertexSet, rn2.vertexSet)) {
-              return new RightNode[]{rn1, rn2}; 
+              return new RightNode[]{rn1, rn2};
             }
           }
         }
       }
       return null;
     }
-    
+
     boolean isFinallyCovered() {
       for (RightNode rn: rightNodeList) {
         if (rn.finallyCovers(this)) {
@@ -161,10 +170,10 @@ public class SafeSeparator {
       }
       return false;
     }
-    
+
     public String toString() {
       StringBuilder sb = new StringBuilder();
-      sb.append("missing(" + left1.index + "," + 
+      sb.append("missing(" + left1.index + "," +
           left2.index + "), covered by {");
       for (RightNode rn: rightNodeList) {
         if (rn.potentiallyCovers(this)) {
@@ -187,7 +196,7 @@ public class SafeSeparator {
         i++;
       }
     }
-    
+
     missingEdgeList = new ArrayList<>();
     {
       int i = 0;
@@ -206,7 +215,7 @@ public class SafeSeparator {
     }
 
     int m = missingEdgeList.size();
-    
+
     VertexSet[] result = new VertexSet[k];
     for (int i = 0; i < k; i++) {
       result[i] = new VertexSet(g.n);
@@ -217,7 +226,7 @@ public class SafeSeparator {
       return result;
     }
 
-//    System.out.println(m + " missings for separator size " + k + 
+//    System.out.println(m + " missings for separator size " + k +
 //        " and total components size " + rest.cardinality());
     for (int i = 0; i < m; i++) {
       missingEdgeList.get(i).index = i;
@@ -227,7 +236,7 @@ public class SafeSeparator {
     VertexSet ns = g.neighborSet(separator);
     ns.and(rest);
 
-    for (int v = ns.nextSetBit(0); v >= 0; 
+    for (int v = ns.nextSetBit(0); v >= 0;
         v = ns.nextSetBit(v + 1)) {
       if (g.neighborSet[v].cardinality() == 1) {
         continue;
@@ -260,7 +269,7 @@ public class SafeSeparator {
         return null;
       }
     }
-    
+
     boolean moving = true;
     while (rightNodeList.size() > k/2 && moving) {
       moving = false;
@@ -280,7 +289,7 @@ public class SafeSeparator {
 
     ArrayList<RightNode> temp = rightNodeList;
     rightNodeList = new ArrayList<>();
-    
+
     for (RightNode rn: temp) {
       boolean covers = false;
       for (MissingEdge me: missingEdgeList) {
@@ -293,7 +302,7 @@ public class SafeSeparator {
         rightNodeList.add(rn);
       }
     }
-    
+
     int nRight = rightNodeList.size();
     for (int i = 0; i < nRight; i++) {
       rightNodeList.get(i).index = i;
@@ -354,16 +363,16 @@ public class SafeSeparator {
       if (maxMinCover == 0) {
         return null;
       }
-      
+
       if (DEBUG) {
         System.out.println("maxMinCover = " + maxMinCover +
-            ", maxFC = " + maxFc + 
+            ", maxFC = " + maxFc +
             ", bestPair = " + Arrays.toString(bestPair));
-        
+
       }
-      rightNodeList.get(bestPair[1]).assignedTo = 
+      rightNodeList.get(bestPair[1]).assignedTo =
           leftNodes[bestPair[0]];
-      
+
       ArrayList<MissingEdge> temp1 = missingEdgeList;
       missingEdgeList = new ArrayList<>();
       for (MissingEdge me: temp1) {
@@ -379,7 +388,7 @@ public class SafeSeparator {
         System.out.println(rn);
       }
     }
-    
+
     for (RightNode rn: rightNodeList) {
       if (rn.assignedTo != null) {
         int i = rn.assignedTo.index;
@@ -395,7 +404,7 @@ public class SafeSeparator {
       for (int v = separator.nextSetBit(0); v >= 0;
           v = separator.nextSetBit(v + 1)) {
         if (!contracts[i].get(v)) {
-          throw new RuntimeException("Not a clique minor: vertex " + v + 
+          throw new RuntimeException("Not a clique minor: vertex " + v +
               " is not contained in the contracted " + contracts[i]);
         }
         i++;
@@ -404,24 +413,24 @@ public class SafeSeparator {
     for (int i = 0; i < contracts.length; i++) {
       for (int j = i + 1; j < contracts.length; j++) {
         if (contracts[i].intersects(contracts[j])) {
-          throw new RuntimeException("Not a clique minor: contracts " + 
+          throw new RuntimeException("Not a clique minor: contracts " +
               contracts[i] + " and " + contracts[j] + " intersect with each other");
         }
         if (!g.neighborSet(contracts[i]).intersects(contracts[j])) {
-          throw new RuntimeException("Not a clique minor: contracts " + 
+          throw new RuntimeException("Not a clique minor: contracts " +
               contracts[i] + " and " + contracts[j] + " are not adjacent to each other");
         }
       }
     }
-    
+
     for (int i = 0; i < contracts.length; i++) {
       if (!g.isConnected(contracts[i])) {
-        throw new RuntimeException("Not a clique minor: contracted " + 
+        throw new RuntimeException("Not a clique minor: contracted " +
             contracts[i] + " is not connected");
       }
     }
   }
-  
+
   int minCover() {
     int minCover = g.n;
     for (MissingEdge me: missingEdgeList) {
@@ -438,7 +447,7 @@ public class SafeSeparator {
         minCover = nCover;
       }
     }
-    return minCover;    
+    return minCover;
   }
 
   MissingEdge leastCovered() {
@@ -459,7 +468,7 @@ public class SafeSeparator {
         result =  me;
       }
     }
-    return result;    
+    return result;
   }
 
   MissingEdge zeroCovered() {
@@ -474,7 +483,7 @@ public class SafeSeparator {
         return me;
       }
     }
-    return null;    
+    return null;
   }
 
   boolean connectable(VertexSet vs1, VertexSet vs2) {
@@ -505,7 +514,7 @@ public class SafeSeparator {
 
   VertexSet connect(VertexSet vs1, VertexSet vs2) {
     ArrayList<VertexSet> layerList = new ArrayList<>();
-    
+
     VertexSet vs = (VertexSet) vs1.clone();
     while (true) {
       VertexSet ns = g.neighborSet(vs);
@@ -516,9 +525,9 @@ public class SafeSeparator {
       layerList.add(ns);
       vs.or(ns);
     }
-    
-    VertexSet result = vs1.unionWith(vs2); 
-    
+
+    VertexSet result = vs1.unionWith(vs2);
+
     VertexSet back = g.neighborSet(vs2);
     for (int i = layerList.size() - 1; i >= 0; i--) {
       VertexSet ns = layerList.get(i);
@@ -527,10 +536,10 @@ public class SafeSeparator {
       result.set(v);
       available.clear(v);
       back = g.neighborSet[v];
-    }    
+    }
     return result;
   }
-  
+
   int countMissings(VertexSet s) {
     int count = 0;
     for (int v = s.nextSetBit(0); v >= 0;

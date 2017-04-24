@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Random;
+import java.util.Stack;
 
 /**
  * This class provides a representation of undirected simple graphs.
@@ -319,7 +320,6 @@ public class Graph {
 				}
 				int n = Integer.parseInt(s[2]);
 				int m = Integer.parseInt(s[3]);
-				VertexSet.setTH(n / 100);
 				Graph g = new Graph(n);
 
 				for (int i = 0; i < m; i++) {
@@ -360,7 +360,6 @@ public class Graph {
 				}
 				int n = Integer.parseInt(s[2]);
 				int m = Integer.parseInt(s[3]);
-				VertexSet.setTH(n / 100);
 				Graph g = new Graph(n);
 
 				for (int i = 0; i < m; i++) {
@@ -789,6 +788,52 @@ public class Graph {
 			}
 		}
 	}
+
+  public ArrayList< VertexSet > getBiconnectedComponents(VertexSet articulationSet){
+		dfCount = 1;
+		dfn = new int[n];
+		low = new int[n];
+
+    ArrayList< VertexSet > bcc = new ArrayList< >();
+    Stack< VertexSet > stack = new Stack< >();
+    dfsForBiconnectedDecomposition(0, stack, bcc, articulationSet);
+
+    VertexSet bc = new VertexSet();
+    while(!stack.isEmpty()){
+      bc.or(stack.pop());
+    }
+    bcc.add(bc);
+
+    return bcc;
+  }
+
+  private void dfsForBiconnectedDecomposition(int v, 
+    Stack< VertexSet > stack, ArrayList< VertexSet > bcc, VertexSet articulationSet){
+		dfn[v] = dfCount++;
+		low[v] = dfn[v];
+		for (int i = 0; i < degree[v]; i++) {
+			int w = neighbor[v][i];
+			if (dfn[w] > 0) {
+				low[v] = Math.min(low[v], dfn[w]);
+			}
+			else if (dfn[w] == 0) {
+        VertexSet edge = new VertexSet(new int[]{v, w});
+        stack.push(edge);
+				dfsForBiconnectedDecomposition(w, stack, bcc, articulationSet);
+				if (low[w] >= dfn[v] &&
+						(dfn[v] > 1 || !lastNeighborIndex(v, i))){
+          articulationSet.set(v);
+          VertexSet bc = new VertexSet();
+          while(!stack.peek().equals(edge)){
+            bc.or(stack.pop());
+          }
+          bc.or(stack.pop());
+          bcc.add(bc);
+				}
+				low[v] = Math.min(low[v], low[w]);
+			}
+		}
+  }
 
 	/**
 	 * Decides if the given index is the effectively

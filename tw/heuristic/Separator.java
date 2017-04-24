@@ -4,14 +4,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Separator implements Cloneable{
-	public Bag parent;
+	Bag parent;
 	Graph graph;
 	VertexSet vertexSet;
 	int size;
 	ArrayList<Bag> incidentBags;
 	boolean safe;
 	boolean unsafe;
-	public boolean wall;
+	boolean wall;
 
 	int[] parentVertex;
 
