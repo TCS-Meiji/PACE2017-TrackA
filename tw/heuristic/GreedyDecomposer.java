@@ -21,11 +21,11 @@ import java.util.List;
 public class GreedyDecomposer {
 	//  static final boolean VERBOSE = true;
 	private static final boolean VERBOSE = false;
-	// private static boolean DEBUG = true;
 	private static boolean DEBUG = false;
+	//private static boolean DEBUG = false;
 
 	private final static int GRAPH_EDGE_SIZE = 1_000_000;
-	//	private final static int GRAPH_EDGE_SIZE = 0;
+	private final static int GRAPH_VERTEX_SIZE = 10_000;
 
 	Graph g;
 
@@ -38,8 +38,10 @@ public class GreedyDecomposer {
 	TreeSet<Pair> minCostSet;
 
 	Edge[] edges;
+	int[] oldFill;
 
 	boolean modeMinDegree;
+	boolean modeExact;
 
 	public GreedyDecomposer(Bag whole) {
 		this.whole = whole;
@@ -59,9 +61,17 @@ public class GreedyDecomposer {
 
 		if(sum <= GRAPH_EDGE_SIZE) {
 			modeMinDegree = false;
+			//if(g.n <= GRAPH_VERTEX_SIZE) {
+			if(sum <= GRAPH_VERTEX_SIZE) {
+				modeExact = true;
+			}
+			else {
+				modeExact = false;
+			}
 		}
 		else {
 			modeMinDegree = true;
+			modeExact = false;
 		}
 
 		mainDecompose();
@@ -87,9 +97,11 @@ public class GreedyDecomposer {
 
 		remaining = (VertexSet) g.all.clone();
 
-		edges = new Edge[0];
-
 		minCostSet = new TreeSet<>();
+
+		if(modeExact) {
+			oldFill = new int[g.n];
+		}
 
 		for(int v = 0; v < g.n; v++) {
 			int cost = 0;
@@ -101,6 +113,9 @@ public class GreedyDecomposer {
 			}
 			Pair p = new Pair(v, cost);
 			minCostSet.add(p);
+			if(modeExact) {
+				oldFill[v] = cost;
+			}
 		}
 	}
 
@@ -108,7 +123,16 @@ public class GreedyDecomposer {
 		initialize();
 
 		while (!remaining.isEmpty()) {
-			int vmin = delayProcess();
+			int vmin;
+			if(modeExact) {
+				Pair p = minCostSet.first();
+				minCostSet.remove(p);
+				vmin = p.v;
+				int cost = fillCount(vmin);
+			}
+			else {
+				vmin = delayProcess();
+			}
 
 			Set<Separator> vminInSeparators = frontier.get(vmin);
 			if(vminInSeparators.size() == 1) {
@@ -125,11 +149,15 @@ public class GreedyDecomposer {
 						for(Bag b : uniqueSeparator.incidentBags) {
 							b.incidentSeparators.remove(uniqueSeparator);
 						}
-						for(int v = uniqueSeparator.vertexSet.nextSetBit(0); v >= 0; v = uniqueSeparator.vertexSet.nextSetBit(v + 1)) {
-							frontier.get(v).remove(uniqueSeparator);
-						}
 					}
 					remaining.clear(vmin);
+
+					if(!modeMinDegree && modeExact) {
+						VertexSet vs = g.neighborSet[vmin].intersectWith(remaining);
+						VertexSet updateSet = g.closedNeighborSet(vs);
+						updateSet.and(remaining);
+						updateProcess(updateSet);
+					}
 					continue;
 				}
 			}
@@ -148,8 +176,10 @@ public class GreedyDecomposer {
 				}
 			}
 			else {
-				for(Edge e : edges) {
-					g.addEdge(e.v, e.w);
+				if(edges != null) {
+					for(Edge e : edges) {
+						g.addEdge(e.v, e.w);
+					}
 				}
 			}
 
@@ -177,9 +207,29 @@ public class GreedyDecomposer {
 			frontier.remove(vmin, vminInSeparators);
 
 			remaining.clear(vmin);
+
+			if(!modeMinDegree && modeExact) {
+				VertexSet vs = g.neighborSet[vmin].intersectWith(remaining);
+				VertexSet updateSet = g.closedNeighborSet(vs);
+				updateSet.and(remaining);
+				updateProcess(updateSet);
+			}
 		}
 
 		whole.setWidth();
+	}
+
+	private void updateProcess(VertexSet updateSet) {
+		for(int v = updateSet.nextSetBit(0); v >= 0; v = updateSet.nextSetBit(v + 1)) {
+			int fill = fillCount(v);
+
+			Pair old = new Pair(v, oldFill[v]);
+			Pair update = new Pair(v, fill);
+
+			minCostSet.remove(old);
+			minCostSet.add(update);
+			oldFill[v] = fill;
+		}
 	}
 
 	private int delayProcess() {
@@ -187,6 +237,7 @@ public class GreedyDecomposer {
 		for(;;) {
 			if(p.cost == 0) {
 				minCostSet.remove(p);
+				edges = null;
 				break;
 			}
 			int cost = costOf(p.v);
@@ -234,7 +285,7 @@ public class GreedyDecomposer {
 				count++;
 			}
 		}
-		edges = addEdges.toArray(new Edge[addEdges.size()]);
+		edges = addEdges.toArray(new Edge[0]);
 		return count;
 	}
 
