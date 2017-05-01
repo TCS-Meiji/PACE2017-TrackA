@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hiromu Otsuka
+ */
+
 package tw.exact;
 
 public class Unsigned{

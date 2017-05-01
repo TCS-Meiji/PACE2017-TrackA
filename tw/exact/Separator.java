@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hisao Tamaki
+ */
+
 package tw.exact;
 
 import java.util.ArrayList;

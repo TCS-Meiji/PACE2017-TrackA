@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hisao Tamaki
+ */
+
 package tw.exact;
 
 import java.io.File;
@@ -131,7 +135,7 @@ public class MainDecomposer {
     for (Bag bag: best.nestedBags) {
       if (bag.getWidth() > lowestPossible) {
         bag.makeRefinable();
-        MTDecomposer mtd = new MTDecomposer(bag, g.minDegree(), g.n - 1);
+        IODecomposer mtd = new IODecomposer(bag, g.minDegree(), g.n - 1);
         mtd.decompose();
         int w = bag.getWidth();
         if (w > lowestPossible) {

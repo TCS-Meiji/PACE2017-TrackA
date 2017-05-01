@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hisao Tamaki
+ */
+
 package tw.exact;
 
 import java.io.File;
@@ -16,7 +20,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
-public class MTDecomposer {
+public class IODecomposer {
 
 //  static final boolean VERBOSE = true;
    private static final boolean VERBOSE = false;
@@ -27,19 +31,19 @@ public class MTDecomposer {
   
   Bag currentBag;
     
-  LayeredSieve tBlockSieve;
+  LayeredSieve oBlockSieve;
 
-  Queue<MBlock> readyQueue;
+  Queue<IBlock> readyQueue;
 
   ArrayList<PMC> pendingEndorsers;
 
 //  Set<XBitSet> processed;
 
-  Map<XBitSet, TBlock> tBlockCache;
+  Map<XBitSet, Oblock> oBlockCache;
 
   Map<XBitSet, Block> blockCache;
   
-  Map<XBitSet, MBlock> mBlockCache;
+  Map<XBitSet, IBlock> iBlockCache;
   
   Set<XBitSet> pmcCache;
   
@@ -54,7 +58,7 @@ public class MTDecomposer {
 
   static int TIMEOUT_CHECK = 100;
 
-  public MTDecomposer(Bag bag, 
+  public IODecomposer(Bag bag, 
       int lowerBound, int upperBound) {
 
     currentBag = bag;
@@ -70,103 +74,99 @@ public class MTDecomposer {
   
   public void decompose() {
     blockCache = new HashMap<>();
-    mBlockCache = new HashMap<>();
+    iBlockCache = new HashMap<>();
 
     pendingEndorsers = new ArrayList<>();
     pmcCache = new HashSet<>();
 
-    decompose(lowerBound);
-  }
-  
-  public void decompose(int targetWidth) {
-    if (VERBOSE) {
-      System.out.println("deompose enter, n = " + currentBag.size + 
-          ", targetWidth = " + targetWidth);
-    }
-    if (targetWidth > upperBound) {
-      return;
-    }
-    this.targetWidth = targetWidth;
-    
-    if (currentBag.size <= targetWidth + 1) {
-      currentBag.nestedBags = null;
-      currentBag.separators = null;
-      return;
-    }
-    
-    // endorserMap = new HashMap<>();
 
-    tBlockSieve = new LayeredSieve(g.n, targetWidth);
-    tBlockCache = new HashMap<>();
-
-    readyQueue = new LinkedList<>();
-
-    readyQueue.addAll(mBlockCache.values());
-    
-    for (int v = 0; v < g.n; v++) {
-      XBitSet cnb = (XBitSet) g.neighborSet[v].clone();
-      cnb.set(v);
-
-      if (DEBUG) {
-        System.out.println(v + ":" + cnb.cardinality() + ", " + cnb);
+    while (targetWidth <= upperBound) {
+      if (VERBOSE) {
+        System.out.println("deompose loop, n = " + currentBag.size + 
+            ", targetWidth = " + targetWidth);
       }
 
-      if (cnb.cardinality() > targetWidth + 1) {
-        continue;
+
+      if (currentBag.size <= targetWidth + 1) {
+        currentBag.nestedBags = null;
+        currentBag.separators = null;
+        return;
       }
-      
-//      if (!pmcCache.contains(cnb)) {
+
+      // endorserMap = new HashMap<>();
+
+      oBlockSieve = new LayeredSieve(g.n, targetWidth);
+      oBlockCache = new HashMap<>();
+
+      readyQueue = new LinkedList<>();
+
+      readyQueue.addAll(iBlockCache.values());
+
+      for (int v = 0; v < g.n; v++) {
+        XBitSet cnb = (XBitSet) g.neighborSet[v].clone();
+        cnb.set(v);
+
+        if (DEBUG) {
+          System.out.println(v + ":" + cnb.cardinality() + ", " + cnb);
+        }
+
+        if (cnb.cardinality() > targetWidth + 1) {
+          continue;
+        }
+
+        //      if (!pmcCache.contains(cnb)) {
         PMC pmc = new PMC(cnb, getBlocks(cnb));
         if (pmc.isValid) {
-//          pmcCache.add(cnb);
+          //          pmcCache.add(cnb);
           if (pmc.isReady()) {
             pmc.endorse();
           }
           else {
-          pendingEndorsers.add(pmc);
+            pendingEndorsers.add(pmc);
           }
-//        }
-      }
-    }
-
-    while (true) {
-      while (!readyQueue.isEmpty()) {
-
-        MBlock ready = readyQueue.remove();
-
-        ready.process();
-
-        if (solution != null) {
-          log("solution found");
-          Bag bag = currentBag.addNestedBag(solution.vertexSet); 
-          solution.carryOutDecomposition(bag);
-          return;
+          //        }
         }
       }
 
-      if (!pendingEndorsers.isEmpty()) {
-        log("queue empty");
-      }
+      while (true) {
+        while (!readyQueue.isEmpty()) {
 
-      ArrayList<PMC> endorsers = pendingEndorsers;
-      pendingEndorsers = new ArrayList<PMC>();
-      for (PMC endorser : endorsers) {
-        endorser.process();
-        if (solution != null) {
-          log("solution found");
-          Bag bag = currentBag.addNestedBag(solution.vertexSet); 
-          solution.carryOutDecomposition(bag);
-          return;
+          IBlock ready = readyQueue.remove();
+
+          ready.process();
+
+          if (solution != null) {
+            log("solution found");
+            Bag bag = currentBag.addNestedBag(solution.vertexSet); 
+            solution.carryOutDecomposition(bag);
+            return;
+          }
+        }
+
+        if (!pendingEndorsers.isEmpty()) {
+          log("queue empty");
+        }
+
+        ArrayList<PMC> endorsers = pendingEndorsers;
+        pendingEndorsers = new ArrayList<PMC>();
+        for (PMC endorser : endorsers) {
+          endorser.process();
+          if (solution != null) {
+            log("solution found");
+            Bag bag = currentBag.addNestedBag(solution.vertexSet); 
+            solution.carryOutDecomposition(bag);
+            return;
+          }
+        }
+        if (readyQueue.isEmpty()) {
+          break;
         }
       }
-      if (readyQueue.isEmpty()) {
-        break;
-      }
+
+      log("failed");
+
+      targetWidth++;
     }
-    
-    log("failed");
-    
-    decompose(targetWidth + 1);
     return;
   }
 
@@ -187,7 +187,7 @@ public class MTDecomposer {
     }
     return true;
   }
-  
+
   Block getBlock(XBitSet component) {
     Block block = blockCache.get(component);
     if (block == null) {
@@ -197,17 +197,17 @@ public class MTDecomposer {
     return block;
   }
 
-  void makeMBlock(XBitSet component, PMC endorser) {
-    MBlock mBlock = mBlockCache.get(component);
-    if (mBlock == null) {
+  void makeIBlock(XBitSet component, PMC endorser) {
+    IBlock iBlock = iBlockCache.get(component);
+    if (iBlock == null) {
       Block block = getBlock(component);
-      mBlock = new MBlock(block, endorser);
+      iBlock = new IBlock(block, endorser);
       blockCache.put(component, block);
     }
   }
 
-  MBlock getMBlock(XBitSet component) {
-    return mBlockCache.get(component);
+  IBlock getIBlock(XBitSet component) {
+    return iBlockCache.get(component);
   }
 
   boolean isFullComponent(XBitSet component, XBitSet sep) {
@@ -251,10 +251,10 @@ public class MTDecomposer {
     Block(XBitSet component) {
       this.component = component;
       this.separator = g.neighborSet(component);
-      
+
       XBitSet rest = g.all.subtract(component);
       rest.andNot(separator);
-      
+
       int minCompo = component.nextSetBit(0);
 
       // the scanning order ensures that the first full component
@@ -289,18 +289,18 @@ public class MTDecomposer {
     boolean isOutbound() {
       return outbound == component;
     }
-    
+
     boolean ofMinimalSeparator() {
       return outbound != null;
     }
-    
+
     public String toString() {
       StringBuilder sb = new StringBuilder();
       if (outbound == component) {
         sb.append("o");
       } 
       else {
-        if (mBlockCache.get(component) != null) {
+        if (iBlockCache.get(component) != null) {
           sb.append("f");
         } else {
           sb.append("i");
@@ -316,16 +316,16 @@ public class MTDecomposer {
     }
   }
 
-  class MBlock {
+  class IBlock {
     Block block;
     PMC endorser;
 
-    MBlock(Block block, PMC endorser) {
+    IBlock(Block block, PMC endorser) {
       this.block = block;
       this.endorser = endorser;
 
       if (DEBUG) {
-        System.out.println("MBlock constructor" + this);
+        System.out.println("IBlock constructor" + this);
       }
 
     }
@@ -337,13 +337,13 @@ public class MTDecomposer {
 
       makeSimpleTBlock();
 
-      ArrayList<XBitSet> tBlockSeparators = new ArrayList<>();
-      tBlockSieve.collectSuperblocks(
-          block.component, block.separator, tBlockSeparators);
+      ArrayList<XBitSet> oBlockSeparators = new ArrayList<>();
+      oBlockSieve.collectSuperblocks(
+          block.component, block.separator, oBlockSeparators);
 
-      for (XBitSet tsep : tBlockSeparators) {
-        TBlock tBlock = tBlockCache.get(tsep);
-        tBlock.plugin(this);
+      for (XBitSet tsep : oBlockSeparators) {
+        Oblock oBlock = oBlockCache.get(tsep);
+        oBlock.plugin(this);
       }
     }
 
@@ -353,40 +353,40 @@ public class MTDecomposer {
         System.out.print("makeSimple: " + this);
       }
 
-      TBlock tBlock = tBlockCache.get(block.separator);
-      if (tBlock == null) {
-        tBlock = new TBlock(block.separator, block.outbound);
-        tBlockCache.put(block.separator, tBlock);
-        tBlockSieve.put(block.outbound, block.separator);
-        tBlock.crown();
+      Oblock oBlock = oBlockCache.get(block.separator);
+      if (oBlock == null) {
+        oBlock = new Oblock(block.separator, block.outbound);
+        oBlockCache.put(block.separator, oBlock);
+        oBlockSieve.put(block.outbound, block.separator);
+        oBlock.crown();
       }
     }
 
     public String toString() {
       StringBuilder sb = new StringBuilder();
-      sb.append("MBlock:" + block.separator + "\n");
+      sb.append("IBlock:" + block.separator + "\n");
       sb.append("  in  :" + block.component + "\n");
       sb.append("  out :" + block.outbound + "\n");
       return sb.toString();
     }
   }
 
-  class TBlock {
+  class Oblock {
     XBitSet separator;
     XBitSet openComponent;
 
-    TBlock(XBitSet separator, XBitSet openComponent) {
+    Oblock(XBitSet separator, XBitSet openComponent) {
       this.separator = separator;
       this.openComponent = openComponent;
     }
 
-    void plugin(MBlock mBlock) {
+    void plugin(IBlock iBlock) {
       if (DEBUG) {
-        System.out.println("plugin " + mBlock);
+        System.out.println("plugin " + iBlock);
         System.out.println("  to " + this);
       }
 
-      XBitSet newsep = separator.unionWith(mBlock.block.separator);
+      XBitSet newsep = separator.unionWith(iBlock.block.separator);
 
       if (newsep.cardinality() > targetWidth + 1) {
         return;
@@ -426,12 +426,12 @@ public class MTDecomposer {
         if (newsep.cardinality() > targetWidth) {
           return;
         }
-        TBlock tBlock = tBlockCache.get(newsep);
-        if (tBlock == null) {
-          tBlock = new TBlock(newsep, fullBlock.component);
-          tBlockCache.put(newsep, tBlock);
-          tBlockSieve.put(fullBlock.component, newsep);
-          tBlock.crown();
+        Oblock oBlock = oBlockCache.get(newsep);
+        if (oBlock == null) {
+          oBlock = new Oblock(newsep, fullBlock.component);
+          oBlockCache.put(newsep, oBlock);
+          oBlockSieve.put(fullBlock.component, newsep);
+          oBlock.crown();
         }
       }
     }
@@ -555,7 +555,7 @@ public class MTDecomposer {
     
     boolean isReady() {
       for (int i = 0; i < inbounds.length; i++) {
-        if (mBlockCache.get(inbounds[i].component) == null) {
+        if (iBlockCache.get(inbounds[i].component) == null) {
           return false;
         }
       }
@@ -622,15 +622,15 @@ public class MTDecomposer {
       // }
       //
 
-      if (mBlockCache.get(target) == null) {
+      if (iBlockCache.get(target) == null) {
         Block block = getBlock(target);
-        MBlock mBlock = new MBlock(block, this);
-        mBlockCache.put(target, mBlock);
+        IBlock iBlock = new IBlock(block, this);
+        iBlockCache.put(target, iBlock);
 
         if (DEBUG) {
-          System.out.println("adding to ready queue" + mBlock);
+          System.out.println("adding to ready queue" + iBlock);
         }
-        readyQueue.add(mBlock);
+        readyQueue.add(iBlock);
       }
     }
 
@@ -643,14 +643,14 @@ public class MTDecomposer {
         if (DEBUG) {
           System.out.println("inbound  = " + inbound);
         }
-        MBlock mBlock = mBlockCache.get(inbound.component);
-        if (mBlock == null) {
-          System.out.println("inbound mBlock is null, block = " + inbound);
+        IBlock iBlock = iBlockCache.get(inbound.component);
+        if (iBlock == null) {
+          System.out.println("inbound iBlock is null, block = " + inbound);
           continue;
         }
 
         Bag subBag = currentBag.addNestedBag(
-            mBlock.endorser.vertexSet);
+        		iBlock.endorser.vertexSet);
         Separator separator = 
             currentBag.addSeparator(inbound.separator);
         
@@ -659,7 +659,7 @@ public class MTDecomposer {
         
         bag.incidentSeparators.add(separator);
         subBag.incidentSeparators.add(separator);
-        mBlock.endorser.carryOutDecomposition(subBag);
+        iBlock.endorser.carryOutDecomposition(subBag);
       }
     }
 
@@ -692,7 +692,7 @@ public class MTDecomposer {
   }
 
   int numberOfEnabledBlocks() {
-    return mBlockCache.size();
+    return iBlockCache.size();
   }
 
   void dumpPendings() {
@@ -705,12 +705,12 @@ public class MTDecomposer {
   void log(String logHeader) {
     if (VERBOSE) {
 
-      int sizes[] = tBlockSieve.getSizes();
+      int sizes[] = oBlockSieve.getSizes();
 
       System.out.println(logHeader);
-      System.out.print("n = " + g.n + " width = " + targetWidth + ", tBlocks = "
-          + tBlockCache.size() + Arrays.toString(sizes));
-      System.out.print(", endorsed = " + mBlockCache.size());
+      System.out.print("n = " + g.n + " width = " + targetWidth + ", oBlocks = "
+          + oBlockCache.size() + Arrays.toString(sizes));
+      System.out.print(", endorsed = " + iBlockCache.size());
       System.out.print(", pendings = " + pendingEndorsers.size());
       System.out.println(", blocks = " + blockCache.size());
     }
