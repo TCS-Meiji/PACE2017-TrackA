@@ -1,9 +1,17 @@
-For PACE 2017 submissions
-
-For the preliminary submission, this repository is kept private.
-On the final submission, it will be made public, with a License file added.
+This repository is primarily for PACE 2017 submissions.
 
 This repository contains both exact and heuristic submissions.
+
+As of May 1, 2017, the exact submission is fairly stable while the
+heuristic submission is still under substantial improvement efforts.
+
+The exact algorithm implements the algorithm proposed in:
+Tamaki, Hisao. "Positive-instance driven dynamic programming for treewidth." 
+arXiv preprint arXiv:1704.05286 (2017).
+
+If you use the implementation provided in this repository in research work,
+please cite the above paper and or this repository in your publication reporting
+the work.
 
 Usage: 
 $ make exact
@@ -14,5 +22,7 @@ $ make
 for making both
 
 The commands are tw-exact and tw-heuristic as specified by the challenge rule.
+These commands are implemented as shell scripts.
+
 
 
