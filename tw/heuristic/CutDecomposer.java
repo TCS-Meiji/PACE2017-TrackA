@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 
 public class CutDecomposer{
-  public static final int LN = 1000;
+  public static final int LN = 2000;
   public static final int HN = 100000;
   public static final int HM = 1000000;
   public static int now;
@@ -37,6 +37,7 @@ public class CutDecomposer{
   }
 
   public void decompose(){
+//    whole.initializeForDecomposition();
     decomposeWithOneCuts();
     if(whole.graph.n <= LN){
 
@@ -44,17 +45,32 @@ public class CutDecomposer{
       whole.flatten();
       whole.setWidth();
 
-      decomposeWithSmallCuts();
-      whole.flatten();
-      whole.setWidth();
-
+      for(int i=3;i<=4;i++){
+        decomposeWithSmallCuts(i);
+        whole.flatten();
+        whole.setWidth();
+      }
       if(DEBUG){
         whole.toTreeDecomposition();
         whole.validate();
       }
     }
-    else if(whole.graph.n <= HN && whole.graph.numberOfEdges() <= HM){
-      decomposeWithSmallCuts();
+    else if(whole.graph.n <= HN  && whole.graph.numberOfEdges() <= HM){
+      decomposeWithSmallCuts(2);
+      whole.flatten();
+      whole.setWidth();
+      if(whole.graph.n <= 20000){
+        decomposeWithSmallCuts(3);
+        whole.flatten();
+        whole.setWidth();
+      }
+      if(whole.graph.n <= 10000){
+        decomposeWithSmallCuts(4);
+        whole.flatten();
+        whole.setWidth();
+      }
+    }
+    else{
       whole.flatten();
       whole.setWidth();
     }
@@ -108,57 +124,43 @@ public class CutDecomposer{
     }
   }
 
-  private void decomposeWithSmallCuts(){
-    if(whole.nestedBags != null){
+  private void decomposeWithSmallCuts(int c){
+    if(whole.nestedBags != null && !whole.nestedBags.isEmpty()){
       for(Bag nb : whole.nestedBags){
-        decomposeWithSmallCuts(nb);
+        decomposeWithSmallCuts(nb,c);
       }
     }
     else{
-      decomposeWithSmallCuts(whole);
+      decomposeWithSmallCuts(whole,c);
     }
     if(DEBUG){
       comment("decompose with small-cuts");
     }
   }
 
-  private void decomposeWithSmallCuts(Bag bag){
+  private void decomposeWithSmallCuts(Bag bag,int c){
     if(bag != whole){
       bag.makeLocalGraph();
     }
     Graph lg = bag.graph;
 
-    if(lg.n <= 2000){
-      cu = 4;
-    }
-    else if(lg.n <= 10000){
-      cu = 3;
-    }
-    else{
-      cu = 2;
-    }
+    cu = c;
 
-    compSize = 4+cu*2;
+    compSize = 6+cu;
 
     NextBag nb = new NextBag(bag,0);
 
     while(true){
       nb = decomposeWithSmallCuts(nb.bag,nb.start,lg.n);
+//      nb = decomposeWithSmallCuts(nb.bag,0,lg.n);
       if (nb == null){
         return;
       }
       nb.bag.makeLocalGraph();
       lg = nb.bag.graph;
-      if(lg.n <= 2000){
-        cu = 4;
-      }
-      else if(lg.n <= 10000){
-        cu = 3;
-      }
-      else{
-        cu = 2;
-      }
-      compSize = 4+cu*2;
+
+      compSize = 6+cu;
+
     }
   }
 
@@ -203,8 +205,14 @@ public class CutDecomposer{
         return new CutDivide(sep,comp,big);
       }
       else{
-        bag.nestedBags = null;
-        bag.separators = null;
+        if(bag == whole){
+          bag.nestedBags.clear();
+          bag.separators.remove(sep);
+        }
+        else{
+          bag.nestedBags = null;
+          bag.separators = null;
+        }
       }
       return null;
     }
@@ -238,7 +246,7 @@ public class CutDecomposer{
   }
 
   private void decomposeWithTwoCuts(){
-    if(whole.nestedBags != null){
+    if(whole.nestedBags != null && !whole.nestedBags.isEmpty()){
       for(Bag nb : whole.nestedBags){
         nb.makeLocalGraph();
         decomposeWithTwoCuts(nb);
@@ -257,6 +265,9 @@ public class CutDecomposer{
   private void decomposeWithTwoCuts(Bag parent){
     ArrayList<VertexSet> art = new ArrayList<VertexSet>();
     Graph lg = parent.graph;
+    if(lg.n <= 1){
+      return;
+    }
     for(int i=0;i<lg.n;i++){
       VertexSet vs = new VertexSet(lg.n);
       vs.set(i);
@@ -314,7 +325,9 @@ public class CutDecomposer{
   // implemented by makii
   private void decomposeWithTwoCuts(Bag parent,ArrayList<VertexSet> art){
     if(art.size() == 0){
-      parent.validate();
+      if(DEBUG){
+        parent.validate();
+      }
       parent.nestedBags = null;
       parent.separators = null;
       return;
@@ -348,6 +361,8 @@ public class CutDecomposer{
     }
   }
 
+
+
   static private void printTreeWidth(Bag b){
     endTime = System.currentTimeMillis();
     System.out.print("," + b.width + "," + (endTime-startTime));
@@ -356,21 +371,22 @@ public class CutDecomposer{
   static long startTime;
   static long endTime;
 
-
   public static void main(String[] args){
     Graph graph = Graph.readGraph(System.in);
 
     Bag whole = new Bag(graph);
 
-    if(DEBUG){
+    if(true){
       startTime = System.currentTimeMillis();
     }
 
     CutDecomposer mtd = new CutDecomposer(whole);
     mtd.decompose();
 
-    if(DEBUG){
+    System.out.println(whole.width);
+    if(true){
       printTreeWidth(whole);
+      System.out.println();
     }
 
   }

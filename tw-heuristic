@@ -2,7 +2,7 @@
 
 JFLAGS="-Xmx30g -Xms30g -Xss1g"
 
-tmp="/tmp/tmp_input"
+tmp="/tmp/tmp_input"_"$$"
 trap 'rm -f $tmp' EXIT
 cat > $tmp
 

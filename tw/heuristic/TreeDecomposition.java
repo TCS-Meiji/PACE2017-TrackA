@@ -274,22 +274,30 @@ public class TreeDecomposition {
 	 * @param ps print stream
 	 */
 	public void writeTo(PrintStream ps) {
-		ps.println("s td " + nb + " " + (width + 1) + " " + g.n);
+    StringBuilder sb = new StringBuilder();
+		//ps.println("s td " + nb + " " + (width + 1) + " " + g.n);
+    sb.append("s td " + nb + " " + (width + 1) + " " + g.n + "\n");
 		for (int i = 1; i <= nb; i++) {
-			ps.print("b " + i);
+			//ps.print("b " + i);
+      sb.append("b " + i);
 			for (int j = 0; j < bags[i].length; j++) {
-				ps.print(" " + (bags[i][j] + 1));
+				//ps.print(" " + (bags[i][j] + 1));
+        sb.append(" " + (bags[i][j] + 1));
 			}
-			ps.println();
+      sb.append("\n");
+			//ps.println();
 		}
 		for (int i = 1; i <= nb; i++) {
 			for (int j = 0; j < degree[i]; j++) {
 				int h = neighbor[i][j];
 				if (i < h) {
-					ps.println(i + " " + h);
+					//ps.println(i + " " + h);
+          sb.append(i + " " + h + "\n");
 				}
 			}
 		}
+    ps.print(sb.toString());
+    ps.flush();
 	}
 
 	/**
