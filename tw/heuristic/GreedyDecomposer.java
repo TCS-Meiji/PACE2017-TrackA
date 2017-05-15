@@ -43,14 +43,46 @@ public class GreedyDecomposer {
 	boolean modeMinDegree;
 	boolean modeExact;
 
+  boolean timeOn;
+  boolean abort;
+  long step;
+  long timeLimit;
+  static final long STEPS_PER_MS = 1;
+
 	public GreedyDecomposer(Bag whole) {
 		this.whole = whole;
 		this.g = whole.graph.copy();
 	}
 
 	public void decompose() {
+    timeOn = false;
+    abort = false;
+    step = 0;
+
 		selectDecompose();
 	}
+
+  public boolean decompose(long timeMS){
+    timeOn = true;
+    abort = false;
+    step = 0;
+    timeLimit = STEPS_PER_MS * timeMS;
+
+		selectDecompose();
+
+    if(abort){
+      return false;
+    }
+    return true;
+  }
+
+  public boolean isAborted(){
+    return timeOn && abort;
+  }
+
+  public long getTimeMS(){
+    return step / STEPS_PER_MS;
+  }
 
 	private void selectDecompose() {
 		int sum = 0;
@@ -123,6 +155,11 @@ public class GreedyDecomposer {
 		initialize();
 
 		while (!remaining.isEmpty()) {
+      if(timeOn && step > timeLimit){
+        abort = true;
+        return;
+      }
+
 			int vmin;
 			if(modeExact) {
 				Pair p = minCostSet.first();
@@ -257,6 +294,7 @@ public class GreedyDecomposer {
 	}
 
 	private int costOf(int v) {
+    ++step;
 		if(modeMinDegree) {
 			return degreeOf(v);
 		}

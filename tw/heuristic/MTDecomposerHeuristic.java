@@ -21,6 +21,8 @@ public class MTDecomposerHeuristic {
    private static final boolean VERBOSE = false;
 //   private static boolean DEBUG = true;
   static boolean DEBUG = false;
+
+  private static final long STEPS_PER_MS = 25;
   
   Graph g;
   
@@ -50,15 +52,21 @@ public class MTDecomposerHeuristic {
   int targetWidth;
 
   PMC solution;
-  
-  SafeSeparator ss;
+
+  boolean abort;
+
+  //SafeSeparator ss;
 
   static int TIMEOUT_CHECK = 100;
   
   boolean counting;
   long numberOfPlugins;
 
-  int count;
+  long timeLimit;
+
+  //int count;
+  long count;
+  long sumCount;
   CPUTimer timer;
   File logFile;
   
@@ -67,9 +75,11 @@ public class MTDecomposerHeuristic {
 
   public MTDecomposerHeuristic(Bag bag, 
       int lowerBound, int upperBound,
-      File logFile, CPUTimer timer) {
+      File logFile, CPUTimer timer, long timeMS) {
+    this.timeLimit = STEPS_PER_MS * timeMS;
     this.logFile = logFile;
     this.timer = timer;
+    this.timeLimit = timeLimit;
 
     currentBag = bag;
     g = bag.graph;
@@ -79,22 +89,54 @@ public class MTDecomposerHeuristic {
     this.lowerBound = lowerBound;
     this.upperBound = upperBound;
     
-    ss = new SafeSeparator(g);
+    //ss = new SafeSeparator(g);
     
+  }
+
+  private MTDecomposerHeuristic(Bag bag, 
+      int lowerBound, int upperBound,
+      File logFile, CPUTimer timer,
+      long count, long timeLimit) {
+    this.logFile = logFile;
+    this.timer = timer;
+    this.timeLimit = timeLimit;
+    this.count = count;
+
+    currentBag = bag;
+    g = bag.graph;
+    if (!g.isConnected(g.all)) {
+      System.err.println("graph must be connected, size = " + bag.size);
+    }
+    this.lowerBound = lowerBound;
+    this.upperBound = upperBound;
+    
+    //ss = new SafeSeparator(g);
   }
   
   public void setMaxMultiplicity(int m) {
     maxMultiplicity = m;
   }
+
+  public boolean isAborted(){
+    return abort;
+  }
+
+  public long getTimeMS(){
+    return (count + sumCount) / STEPS_PER_MS;
+  }
   
   public boolean decompose() {
+    abort = false;
     blockCache = new HashMap<>();
     mBlockCache = new HashMap<>();
 
     pendingEndorsers = new ArrayList<>();
     pmcCache = new HashSet<>();
 
-    return decompose(lowerBound);
+    //return decompose(lowerBound);
+    boolean result = decompose(lowerBound);
+    //System.out.println("c count = " + count);
+    return result;
   }
   
   public boolean decompose(int targetWidth) {
@@ -110,7 +152,7 @@ public class MTDecomposerHeuristic {
     }
     this.targetWidth = targetWidth;
     
-    count = 0;
+    //count = 0;
     tbCount = 0;
     siCount = 0;
     
@@ -157,13 +199,20 @@ public class MTDecomposerHeuristic {
 
     while (true) {
       while (!readyQueue.isEmpty()) {
-        count++;
+        //count++;
+        /*
         if (count > TIMEOUT_CHECK) {
           count = 0;
           if (timer != null && timer.hasTimedOut()) {
             log("**TIMEOUT**");
             return false;
           }
+        }
+        */
+
+        if(count > timeLimit){
+          abort = true;
+          return false;
         }
 
         MBlock ready = readyQueue.remove();
@@ -375,10 +424,13 @@ public class MTDecomposerHeuristic {
       bag.makeRefinable();
 //      bag.graph.writeTo(System.out);
       MTDecomposerHeuristic mtd = new MTDecomposerHeuristic(bag, targetWidth + 1, upperBound,
-          logFile, timer);
+          logFile, timer, count, timeLimit);
       if(!mtd.decompose()){
+        sumCount += (mtd.sumCount + mtd.count);
+        abort |= mtd.isAborted();
         return false;
       }
+      sumCount += (mtd.sumCount + mtd.count);
     }
     return true;
   }
@@ -667,6 +719,9 @@ public class MTDecomposerHeuristic {
       if (counting) {
         numberOfPlugins++;
       }
+
+      ++count;
+
       if (DEBUG) {
         System.out.println("plugin " + mBlock);
         System.out.println("  to " + this);
@@ -1054,6 +1109,7 @@ public class MTDecomposerHeuristic {
   }
 
   private static void count() {
+    /*
    String path = "random";
    
    String[] instances = {
@@ -1111,8 +1167,10 @@ public class MTDecomposerHeuristic {
      td.validate();
      // td.analyze(1);
    }
+   */
   }
   private static void test() {
+    /*
 //    String path = "coloring_gr2";
     // String path = "coloring-targets";
     // String name = "queen5_5";
@@ -1237,6 +1295,7 @@ public class MTDecomposerHeuristic {
       // TODO Auto-generated catch block
       e.printStackTrace();
     }
+    */
   }
 
   static class MinComparator implements Comparator<VertexSet> {
@@ -1247,7 +1306,7 @@ public class MTDecomposerHeuristic {
   }
 
   public static void main(String args[]) {
-    test();
+    //test();
 //    count();
   }
 }

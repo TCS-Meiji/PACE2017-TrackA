@@ -17,9 +17,12 @@ import java.util.Random;
 import java.util.Collections;
 
 public class MainDecomposer{
-  public static final int C = 3;
-  public static final int D = 10;
-  public static final int TIME_LIMIT = 300;
+  public static enum Mode{
+    greedy, pathDecomposition, treeDecomposition
+  }
+  public static final long MAX_TIME = 1800000;
+  public static final long INITIAL_TIME_MS = 2000;
+  public static final long D_MS = 2000;
   public static final int MAX_MULTIPLICITY = 1;
 
   private static Random random;
@@ -48,6 +51,10 @@ public class MainDecomposer{
       return;
     }
 
+    if(DEBUG){
+      comment("commit");
+    }
+
     Bag[] copiedBags = new Bag[bags.length];
     for(int i = 0; i < copiedBags.length; i++){
       copiedBags[i] = (Bag)bags[i].clone();
@@ -55,9 +62,11 @@ public class MainDecomposer{
 
     if(bags.length == 1){
       copiedBags[0].flatten();
-      best = copiedBags[0].toTreeDecomposition();
+      TreeDecomposition td = copiedBags[0].toTreeDecomposition();
+      setWidth(td);
 
-      if(DEBUG){
+      if(best == null || td.width < best.width){
+        best = td;
         comment("width = " + best.width);
         printTime();
       }
@@ -70,12 +79,24 @@ public class MainDecomposer{
       copiedBags[i].flatten();
       td.combineWith(copiedBags[i].toTreeDecomposition(), invs[i], null);
     }
-    best = td;
+    setWidth(td);
 
-    if(DEBUG){
+    if(best == null || td.width < best.width){
+      best = td;
       comment("width = " + best.width);
       printTime();
     }
+  }
+
+  private static void setWidth(TreeDecomposition td){
+    if(td == null){
+      return;
+    }
+    int width = -1;
+    for(int i = 1; i <= td.nb; i++){
+      width = Math.max(width, td.bags[i].length - 1);
+    }
+    td.width = width;
   }
 
   private static void comment(String comment){
@@ -122,26 +143,13 @@ public class MainDecomposer{
       bags[0] = new Bag(graph);
 
       decomposeGreedyWithSmallCuts(bags[0]);
-      //decomposeGreedy(bags[0]);
 
       commit();
-
-      if(DEBUG){
-        comment("decomposed by greedy");
-        bags[0].validate();
-        printTime();
-      }
 
       while(!bags[0].optimal){
         improveWithSeparators(bags[0], bags[0].getWidth());
         commit();
         bags[0].flatten();
-      }
-
-      if(DEBUG){
-        comment("got optimal solution");
-        bags[0].validate();
-        printTime();
       }
 
       return getBestTreeDecompositionSoFar();
@@ -175,15 +183,9 @@ public class MainDecomposer{
 
     for(int i = 0; i < nc; i++){
       decomposeGreedyWithSmallCuts(bags[i]);
-      //decomposeGreedy(bags[i]);
     }
 
     commit();
-
-    if(DEBUG){
-      comment("decomposed by greedy");
-      printTime();
-    }
 
     PriorityQueue< Bag > queue =
       new PriorityQueue< >(nc, WIDTH_DESCENDING_ORDER);
@@ -200,11 +202,6 @@ public class MainDecomposer{
       if(!b.optimal){
         queue.offer(b);
       }
-    }
-
-    if(DEBUG){
-      comment("got optimal solution");
-      printTime();
     }
 
     return getBestTreeDecompositionSoFar();
@@ -260,124 +257,235 @@ public class MainDecomposer{
     }
 
     while(bag.getWidth() >= k){
-      Bag max = null;
+      Bag maxBag = null;
       for(Bag nb : bag.nestedBags){
-        if(max == null || nb.size > max.size){
-          max = nb;
+        if(maxBag == null || nb.size > maxBag.size){
+          maxBag = nb;
         }
       }
-
-      int r = max.size;
-      int count = 1;
-      for(;;){
-        ArrayList< Separator > separatorsToCheck = new ArrayList< >();
-        searchBagsToImprove(max, null, r, separatorsToCheck);
-
-        for(Separator s : separatorsToCheck){
-          s.wall = true;
+      long timeMS = INITIAL_TIME_MS;
+      int gdVS = maxBag.size, pdVS = maxBag.size, tdVS = maxBag.size;
+      while(true){
+        if(DEBUG){
+          comment("timeMS = " + timeMS);
+          comment("gdVS = " + gdVS);
+          comment("pdVS = " + pdVS);
+          comment("tdVS = " + tdVS);
         }
-
-        Bag target;
-        if(!separatorsToCheck.isEmpty()){
-          bag.pack();
-          target = findBagContaining(max, bag);
-        }
-        else{
-          target = bag;
-        }
-
-        r = target.size;
-
-        if(target.parent != null){
-          target.makeLocalGraph();
-        }
-
-        tryDecomposeExactly(target, target.graph.minDegree(), k - 1, k - 1);
-
-        for(Separator s : separatorsToCheck){
-          s.wall = false;
-        }
-
-        if(!separatorsToCheck.isEmpty()){
-          bag.flatten();
-        }
-
-        if(target.getWidth() <= k - 1){
+        gdVS = tryImproveWith(Mode.greedy, 
+            bag, maxBag, timeMS, gdVS, 10, 3);
+        if(gdVS < 0){
           break;
         }
-
-        if(count == 1 || count % C == 0){
-          r += D;
+        pdVS = tryImproveWith(Mode.pathDecomposition, 
+            bag, maxBag, timeMS, pdVS, 30, 2);
+        if(pdVS < 0){
+          break;
         }
-
-        ++count;
+        tdVS = tryImproveWith(Mode.treeDecomposition, 
+            bag, maxBag, timeMS, tdVS, 3, 3);
+        if(tdVS < 0){
+          break;
+        }
+        timeMS += D_MS;
       }
     }
 
     return true;
   }
 
-  private static void searchBagsToImprove(Bag bag, Separator from, int max,
-      ArrayList< Separator > separatorsToCheck){
-    Set< Separator > visitedSeps = new HashSet< >();
+  private static void searchBagsToImproveLikeTree(Bag bag, Separator from, int max,
+      int targetWidth, ArrayList< Separator > separatorsToCheck){
     Set< Bag > visitedBags = new HashSet< >();
     VertexSet vs = new VertexSet();
 
     visitedBags.add(bag);
     vs.or(bag.vertexSet);
 
+    collectSubsetBags(visitedBags, vs);
+
     while(vs.cardinality() < max){
-      ArrayList< Bag > outers = new ArrayList< >();
-      ArrayList< Bag > choicedBags = new ArrayList< >();
-      for(Bag b : visitedBags){
-        for(Separator is : b.incidentSeparators){
-          for(Bag nb : is.incidentBags){
-            if(nb == b || visitedBags.contains(nb)){
-              continue;
-            }
-            if(nb.vertexSet.isSubset(b.vertexSet)){
-              choicedBags.add(nb);
-            }
-            else{
-              outers.add(nb);
-            }
+      if(!choiceBagAtRandom(visitedBags, vs)){
+        break;
+      }
+    }
+
+    collectBagsConnectingLargeSeparator(visitedBags, vs, targetWidth, 0);
+    collectSeparatorsTocheck(visitedBags, separatorsToCheck);
+  }
+
+  private static void searchBagsToImproveLikePath(Bag bag, Separator from, int max,
+      int targetWidth, ArrayList< Separator > separatorsToCheck){
+    Set< Bag > visitedBags = new HashSet< >();
+    VertexSet vs = new VertexSet();
+
+    visitedBags.add(bag);
+    vs.or(bag.vertexSet);
+
+    collectBagsLikePath(bag, visitedBags, vs, 4 * max / 5);
+
+    while(vs.cardinality() < max){
+      if(!choiceBagAtRandom(visitedBags, vs)){
+        break;
+      }
+    }
+
+    collectBagsConnectingLargeSeparator(visitedBags, vs, targetWidth, 0);
+    collectSeparatorsTocheck(visitedBags, separatorsToCheck);
+  }
+
+  private static void collectBagsLikePath(
+      Bag bag, Set< Bag > visitedBags, VertexSet vs, int max){
+    Bag s = bag, t = bag;
+    while(vs.cardinality() < max){
+      ArrayList< Bag > tBags = new ArrayList< >();
+      for(Separator is : t.incidentSeparators){
+        for(Bag ib : is.incidentBags){
+          if(ib != t && ib != s && !visitedBags.contains(ib)){
+            tBags.add(ib);
           }
         }
       }
-
-      if(!outers.isEmpty()){
-        choicedBags.add(outers.get(random.nextInt(outers.size())));
+      if(!tBags.isEmpty()){
+        t = tBags.get(random.nextInt(tBags.size()));
+        visitedBags.add(t);
+        vs.or(t.vertexSet);
       }
 
-      for(Bag b : choicedBags){
-        visitedBags.add(b);
-        vs.or(b.vertexSet);
-        for(Separator is : b.incidentSeparators){
-          for(Bag nb : is.incidentBags){
-            if(nb != b && visitedBags.contains(nb)){
-              visitedSeps.add(is);
-              break;
-            }
+      if(vs.cardinality() >= max){
+        break;
+      }
+
+      ArrayList< Bag > sBags = new ArrayList< >();
+      for(Separator is : s.incidentSeparators){
+        for(Bag ib : is.incidentBags){
+          if(ib != s && ib != t && !visitedBags.contains(ib)){
+            sBags.add(ib);
+          }
+        }
+      }
+      if(!sBags.isEmpty()){
+        s = sBags.get(random.nextInt(sBags.size()));
+        visitedBags.add(s);
+        vs.or(s.vertexSet);
+      }
+
+      if(tBags.isEmpty() && sBags.isEmpty()){
+        break;
+      }
+    }
+
+    collectSubsetBags(visitedBags, vs);
+  }
+
+  private static boolean choiceBagAtRandom(Set< Bag > visitedBags, VertexSet vs){
+    ArrayList< Bag > outers = new ArrayList< >();
+    for(Bag b : visitedBags){
+      for(Separator is : b.incidentSeparators){
+        for(Bag nb : is.incidentBags){
+          if(nb != b && !visitedBags.contains(nb)){
+            outers.add(nb);
           }
         }
       }
     }
+    if(!outers.isEmpty()){
+      Bag bag = outers.get(random.nextInt(outers.size()));
+      visitedBags.add(bag);
+      vs.or(bag.vertexSet);
+      collectSubsetBags(visitedBags, vs);
+      return true;
+    }
+    return false;
+  }
 
-    for(Bag b : visitedBags){
-      for(Separator is : b.incidentSeparators){
-        if(!visitedSeps.contains(is)){
-          separatorsToCheck.add(is);
-        }
-        else if(is.incidentBags.size() >= 3){
-          boolean all = true;
+  private static void collectSubsetBags(Set< Bag > visitedBags, VertexSet vs){
+    ArrayList< Bag > toVisited = new ArrayList< >();
+    while(true){
+      for(Bag b : visitedBags){
+        for(Separator is : b.incidentSeparators){
           for(Bag ib : is.incidentBags){
-            if(!visitedBags.contains(ib)){
-              all = false;
-              break;
+            if(ib != b && !visitedBags.contains(ib)
+                && ib.vertexSet.isSubset(b.vertexSet)){
+              toVisited.add(ib);
             }
           }
-          if(!all){
+        }
+      }
+      if(toVisited.isEmpty()){
+        return;
+      }
+      for(Bag b : toVisited){
+        visitedBags.add(b);
+        vs.or(b.vertexSet);
+      }
+      toVisited.clear();
+    }
+  }
+
+  private static void collectBagsConnectingLargeSeparator(
+      Set< Bag > visitedBags, VertexSet vs, int targetWidth, int d){
+    ArrayList< Bag > toVisited = new ArrayList< >();
+    while(true){
+      for(Bag b : visitedBags){
+        for(Separator is : b.incidentSeparators){
+          if(Math.abs(targetWidth - is.size) <= d){
+            for(Bag ib : is.incidentBags){
+              if(!visitedBags.contains(ib)){
+                toVisited.add(ib);
+              }
+            }
+          }
+        }
+      }
+      if(toVisited.isEmpty()){
+        return;
+      }
+      for(Bag b : toVisited){
+        visitedBags.add(b);
+        vs.or(b.vertexSet);
+        collectSubsetBags(visitedBags, vs);
+      }
+      toVisited.clear();
+    }
+  }
+
+  private static void collectBagsFormingStar(
+      Set< Bag > visitedBags, VertexSet vs){
+    ArrayList< Bag > toVisited = new ArrayList< >();
+    while(true){
+      for(Bag b : visitedBags){
+        for(Separator is : b.incidentSeparators){
+          // star
+          if(is.incidentBags.size() >= 3){
+            for(Bag ib : is.incidentBags){
+              if(!visitedBags.contains(ib)){
+                toVisited.add(ib);
+              }
+            }
+          }
+        }
+      }
+      if(toVisited.isEmpty()){
+        return;
+      }
+      for(Bag b : toVisited){
+        visitedBags.add(b);
+        vs.or(b.vertexSet);
+        collectSubsetBags(visitedBags, vs);
+      }
+      toVisited.clear();
+    }
+  }
+
+  private static void collectSeparatorsTocheck(
+      Set< Bag > visitedBags, ArrayList< Separator > separatorsToCheck){
+    for(Bag b : visitedBags){
+      for(Separator is : b.incidentSeparators){
+        for(Bag ib : is.incidentBags){
+          if(ib != b && !visitedBags.contains(ib)){
             separatorsToCheck.add(is);
+            break;
           }
         }
       }
@@ -437,10 +545,8 @@ public class MainDecomposer{
   }
 
   private static void tryDecomposeExactly(Bag bag, int lowerBound, int upperBound, int targetWidth){
-    if(DEBUG){
-      comment("try decompose exactly");
-      comment("targetWidth = " + targetWidth + ", width = " + bag.getWidth() + ", size = " + bag.size);
-      bag.validate();
+    if(lowerBound > upperBound){
+      return;
     }
 
     Bag triedBag = (Bag)bag.clone();
@@ -450,48 +556,133 @@ public class MainDecomposer{
     }
 
     decomposeGreedy(triedBag);
-    //decomposeGreedyWithOneTwoCuts(triedBag);
-
     if(triedBag.getWidth() <= targetWidth){
       replace(triedBag, bag);
       return;
     }
 
-    triedBag.detectSafeSeparators();
-
-    if(triedBag.countSafeSeparators() == 0){
-      triedBag.initializeForDecomposition();
-      //MTDecomposer mtd = new MTDecomposer(triedBag, lowerBound, upperBound);
-      CPUTimer timer = new CPUTimer();
-      timer.setTimeout(TIME_LIMIT);
-      MTDecomposerHeuristic mtd = new MTDecomposerHeuristic(triedBag, lowerBound, upperBound, null, timer);
-      mtd.setMaxMultiplicity(MAX_MULTIPLICITY);
-      if(!mtd.decompose()){
-        return;
-      }
-    }
-    else{
-      triedBag.pack();
-      for(Bag b : triedBag.nestedBags){
-        b.makeRefinable();
-        //MTDecomposer mtd = new MTDecomposer(b, lowerBound, upperBound);
-        CPUTimer timer = new CPUTimer();
-        timer.setTimeout(TIME_LIMIT);
-        MTDecomposerHeuristic mtd = new MTDecomposerHeuristic(b, lowerBound, upperBound, null, timer);
-        mtd.setMaxMultiplicity(MAX_MULTIPLICITY);
-        if(!mtd.decompose()){
-          return;
-        }
-      }
+    triedBag.initializeForDecomposition();
+    MTDecomposerHeuristic mtd = new MTDecomposerHeuristic(
+        triedBag, lowerBound, upperBound, null, null, MAX_TIME);
+    mtd.setMaxMultiplicity(MAX_MULTIPLICITY);
+    if(!mtd.decompose()){
+      return;
     }
 
     if(triedBag.getWidth() <= targetWidth){
       replace(triedBag, bag);
-      bag.flatten();
-      for(Separator s : bag.separators){
-        s.safe = s.unsafe = false;
-      }
     }
+  }
+
+  private static int tryImproveWith(Mode mode,
+      Bag whole, Bag maxBag, long time, int vsSize, int cycle, int d){
+    if(DEBUG){
+      comment("mode = " + mode);
+      comment("cycle = " + cycle);
+      comment("d = " + d);
+      comment("timeLimit = " + time);
+    }
+
+    int k = whole.getWidth();
+    int targetSize = vsSize;
+    int count = 0;
+    long sum = 0;
+    while(true){
+      if(DEBUG){
+        comment("k = " + k);
+        comment("targetSize = " + targetSize);
+        comment("count = " + count);
+        comment("sum = " + sum);
+      }
+
+      ArrayList< Separator > separatorsToCheck = new ArrayList< >();
+      switch(mode){
+        case greedy : case treeDecomposition :
+          searchBagsToImproveLikeTree(
+              maxBag, null, targetSize, k - 1, separatorsToCheck);
+          break;
+        case pathDecomposition :
+          searchBagsToImproveLikePath(
+              maxBag, null, targetSize, k - 1, separatorsToCheck);
+          break;
+      }
+      for(Separator s : separatorsToCheck){
+        s.wall = true;
+      }
+      if(!separatorsToCheck.isEmpty()){
+        whole.pack();
+      }
+
+      Bag target;
+      if(!separatorsToCheck.isEmpty()){
+        target = findBagContaining(maxBag, whole);
+      }
+      else{
+        target = whole;
+      }
+
+      if(target.parent != null){
+        target.makeLocalGraph();
+      }
+
+      Bag triedBag = (Bag)target.clone();
+      triedBag.initializeForDecomposition();
+      boolean success = false;
+      switch(mode){
+        case greedy :
+          GreedyDecomposer gd = new GreedyDecomposer(triedBag);
+          if(gd.decompose(time - sum)){
+            success = true;
+          }
+          sum += gd.getTimeMS();
+          break;
+
+        case pathDecomposition :
+          PathDecomposer pd = new PathDecomposer(triedBag, 
+              triedBag.graph.minDegree(), k - 1);
+          if(pd.decompose(time - sum)){
+            success = true;
+          }
+          sum += pd.getTimeMS();
+          break;
+
+        case treeDecomposition :
+          MTDecomposerHeuristic mtd = new MTDecomposerHeuristic(
+              triedBag, triedBag.graph.minDegree(), k - 1, null, null, time - sum);
+          mtd.setMaxMultiplicity(MAX_MULTIPLICITY);
+          if(mtd.decompose()){
+            success = true;
+          }
+          sum += mtd.getTimeMS();
+          break;
+      }
+
+      for(Separator s : separatorsToCheck){
+        s.wall = false;
+      }
+
+      if(success && triedBag.getWidth() <= k - 1){
+        replace(triedBag, target);
+        whole.flatten();
+        return -1;
+      }
+
+      if(!separatorsToCheck.isEmpty()){
+        whole.flatten();
+      }
+
+      if(sum >= time){
+        break;
+      }
+
+      if(count % cycle == 0){
+        targetSize += d;
+      }
+
+      ++count;
+    }
+
+    return targetSize;
   }
 
   private static void replace(Bag from, Bag to){
