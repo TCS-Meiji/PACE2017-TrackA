@@ -21,18 +21,22 @@ public class MainDecomposer{
     greedy, pathDecomposition, treeDecomposition
   }
   public static final long MAX_TIME = 1800000;
-  public static final long INITIAL_TIME_MS = 2000;
-  public static final long D_MS = 2000;
+  public static final long INITIAL_TIME_MS = 4000;
   public static final int MAX_MULTIPLICITY = 1;
+  public static final long CUT_D_TIME_MS = 300000;
+  public static final long DETECT_TIME_MS = 10000;
 
   private static Random random;
   private static Graph wholeGraph;
   private static TreeDecomposition best;
   private static int[][] invs;
   private static Bag[] bags;
+  private static long detectSum;
   private static long startTime;
 
   private static final boolean DEBUG = false;
+
+  private static int countGD, countPD, countTD;
 
   private static final Comparator< Bag > WIDTH_DESCENDING_ORDER =
     new Comparator< Bag >(){
@@ -61,6 +65,19 @@ public class MainDecomposer{
     }
 
     if(bags.length == 1){
+      // trivial tree decomposition
+      if(copiedBags[0].nestedBags == null || copiedBags[0].nestedBags.isEmpty()){
+        TreeDecomposition trivial =
+          new TreeDecomposition(0, copiedBags[0].graph.n - 1, copiedBags[0].graph);
+        trivial.addBag(copiedBags[0].graph.all.toArray());
+        if(best == null || trivial.width < best.width){
+          best = trivial;
+          comment("width = " + best.width);
+          printTime();
+        }
+        return;
+      }
+
       copiedBags[0].flatten();
       TreeDecomposition td = copiedBags[0].toTreeDecomposition();
       setWidth(td);
@@ -76,8 +93,17 @@ public class MainDecomposer{
 
     TreeDecomposition td = new TreeDecomposition(0, 0, wholeGraph);
     for(int i = 0; i < copiedBags.length; i++){
-      copiedBags[i].flatten();
-      td.combineWith(copiedBags[i].toTreeDecomposition(), invs[i], null);
+      // trivial tree decomposition
+      if(copiedBags[i].nestedBags == null || copiedBags[i].nestedBags.isEmpty()){
+        TreeDecomposition trivial =
+          new TreeDecomposition(0, copiedBags[i].graph.n - 1, copiedBags[i].graph);
+        trivial.addBag(copiedBags[i].graph.all.toArray());
+        td.combineWith(trivial, invs[i], null);
+      }
+      else{
+        copiedBags[i].flatten();
+        td.combineWith(copiedBags[i].toTreeDecomposition(), invs[i], null);
+      }
     }
     setWidth(td);
 
@@ -112,8 +138,13 @@ public class MainDecomposer{
     best = null;
     bags = null;
     invs = null;
+    detectSum = 0;
     random = new Random(seed);
     startTime = System.currentTimeMillis();
+
+    // trivial tree decomposition
+    best = new TreeDecomposition(0, wholeGraph.n - 1, wholeGraph);
+    best.addBag(wholeGraph.all.toArray());
 
     if(DEBUG){
       comment("seed = " + seed);
@@ -142,7 +173,20 @@ public class MainDecomposer{
       bags = new Bag[1];
       bags[0] = new Bag(graph);
 
-      decomposeGreedyWithSmallCuts(bags[0]);
+      if(decomposeWithSmallCuts(bags[0])){
+        commit();
+      }
+
+      if(bags[0].countSafeSeparators() == 0){
+        decomposeGreedy(bags[0]);
+      }
+      else{
+        for(Bag nb : bags[0].nestedBags){
+          nb.makeRefinable();
+          decomposeGreedy(nb);
+        }
+        bags[0].flatten();
+      }
 
       commit();
 
@@ -181,8 +225,25 @@ public class MainDecomposer{
       bags[i] = new Bag(graphs[i]);
     }
 
+    commit();
+
     for(int i = 0; i < nc; i++){
-      decomposeGreedyWithSmallCuts(bags[i]);
+      decomposeWithSmallCuts(bags[i]);
+    }
+
+    commit();
+
+    for(int i = 0; i < nc; i++){
+      if(bags[i].countSafeSeparators() == 0){
+        decomposeGreedy(bags[i]);
+      }
+      else{
+        for(Bag nb : bags[i].nestedBags){
+          nb.makeRefinable();
+          decomposeGreedy(nb);
+        }
+        bags[i].flatten();
+      }
     }
 
     commit();
@@ -229,7 +290,9 @@ public class MainDecomposer{
       return;
     }
 
-    bag.detectSafeSeparators();
+    if(detectSum < DETECT_TIME_MS){
+      detectSum += bag.detectSafeSeparators(DETECT_TIME_MS - detectSum);
+    }
 
     if(bag.countSafeSeparators() == 0){
       improve(bag, k);
@@ -265,29 +328,39 @@ public class MainDecomposer{
       }
       long timeMS = INITIAL_TIME_MS;
       int gdVS = maxBag.size, pdVS = maxBag.size, tdVS = maxBag.size;
+      int count = 0;
       while(true){
         if(DEBUG){
           comment("timeMS = " + timeMS);
           comment("gdVS = " + gdVS);
           comment("pdVS = " + pdVS);
           comment("tdVS = " + tdVS);
+          comment("countGD = " + countGD);
+          comment("countPD = " + countPD);
+          comment("countTD = " + countTD);
         }
         gdVS = tryImproveWith(Mode.greedy, 
             bag, maxBag, timeMS, gdVS, 10, 3);
         if(gdVS < 0){
+          ++countGD;
           break;
         }
         pdVS = tryImproveWith(Mode.pathDecomposition, 
             bag, maxBag, timeMS, pdVS, 30, 2);
         if(pdVS < 0){
+          ++countPD;
           break;
         }
         tdVS = tryImproveWith(Mode.treeDecomposition, 
             bag, maxBag, timeMS, tdVS, 3, 3);
         if(tdVS < 0){
+          ++countTD;
           break;
         }
-        timeMS += D_MS;
+        refresh(bag, maxBag, Math.max(gdVS, Math.max(pdVS, tdVS)) + 30);
+        comment("refreshed");
+        comment("new width = " + bag.getWidth());
+        break;
       }
     }
 
@@ -520,10 +593,24 @@ public class MainDecomposer{
     mfd.decompose();
   }
 
+  private static boolean decomposeWithSmallCuts(Bag bag){
+    bag.initializeForDecomposition();
+    CutDecomposer cd = new CutDecomposer(bag);
+    cd.decompose(CUT_D_TIME_MS);
+    if(DEBUG){
+      comment("finish cut decompose");
+    }
+    return bag.nestedBags != null && !bag.nestedBags.isEmpty();
+  }
+
+/*
   private static void decomposeGreedyWithSmallCuts(Bag bag){
     bag.initializeForDecomposition();
     CutDecomposer cd = new CutDecomposer(bag);
     cd.decompose();
+
+    // [TODO]
+    // commit();
 
     if(DEBUG){
       comment("finish cut decompose");
@@ -543,6 +630,7 @@ public class MainDecomposer{
 
     bag.flatten();
   }
+  */
 
   private static void tryDecomposeExactly(Bag bag, int lowerBound, int upperBound, int targetWidth){
     if(lowerBound > upperBound){
@@ -590,7 +678,7 @@ public class MainDecomposer{
     while(true){
       if(DEBUG){
         comment("k = " + k);
-        comment("targetSize = " + targetSize);
+        comment("vs = " + targetSize);
         comment("count = " + count);
         comment("sum = " + sum);
       }
@@ -619,6 +707,10 @@ public class MainDecomposer{
       }
       else{
         target = whole;
+      }
+
+      if(DEBUG){
+        comment("targetSize = " + target.size);
       }
 
       if(target.parent != null){
@@ -683,6 +775,42 @@ public class MainDecomposer{
     }
 
     return targetSize;
+  }
+
+  private static void refresh(Bag whole, Bag maxBag, int vsSize){
+    int k = whole.getWidth();
+    ArrayList< Separator > separatorsToCheck = new ArrayList< >();
+    searchBagsToImproveLikeTree(
+        maxBag, null, vsSize, k - 1, separatorsToCheck);
+
+    for(Separator s : separatorsToCheck){
+      s.wall = true;
+    }
+
+    if(!separatorsToCheck.isEmpty()){
+      whole.pack();
+    }
+
+    Bag target;
+    if(!separatorsToCheck.isEmpty()){
+      target = findBagContaining(maxBag, whole);
+    }
+    else{
+      target = whole;
+    }
+
+    if(target.parent != null){
+      target.makeLocalGraph();
+    }
+    target.initializeForDecomposition();
+    GreedyDecomposer gd = new GreedyDecomposer(target);
+    gd.decompose();
+
+    for(Separator s : separatorsToCheck){
+      s.wall = false;
+    }
+
+    whole.flatten();
   }
 
   private static void replace(Bag from, Bag to){

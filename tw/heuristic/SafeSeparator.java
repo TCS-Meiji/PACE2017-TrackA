@@ -3,8 +3,11 @@ package tw.heuristic;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+
+
 public class SafeSeparator {
   private static int MAX_MISSINGS = 100;
+  private static int DEFAULT_MAX_STEPS = 10000;
   private static final boolean CONFIRM_MINOR = true;
 //  private static final boolean CONFIRM_MINOR = false;
 //    private static final boolean DEBUG = true;
@@ -12,6 +15,8 @@ public class SafeSeparator {
 
   Graph g;
 
+  int maxSteps;
+  int steps;
   LeftNode[] leftNodes;
   ArrayList<RightNode> rightNodeList;
   ArrayList<MissingEdge> missingEdgeList;
@@ -21,8 +26,92 @@ public class SafeSeparator {
     this.g = g;
   }
 
-  public boolean isSafeSeparator(VertexSet separator) {
+  public boolean isOneWaySafe(VertexSet separator, VertexSet component) {
+    return isOneWaySafe(separator, component, DEFAULT_MAX_STEPS);
+  }
+
+  public boolean isOneWaySafe(VertexSet separator, VertexSet component, int maxSteps) {
+    try {
+      return isOneWaySafeCounting(separator, component, maxSteps);
+    }
+    catch (StepsExceededException e) {
+      return false;
+    }
+  }
+  public boolean isOneWaySafeCounting(VertexSet separator, VertexSet component, int maxSteps)
+    throws StepsExceededException {
     //  System.out.println("isSafeSeparator " + separator);
+    this.maxSteps = maxSteps;
+    steps = 0;
+    ArrayList<VertexSet> components = g.getComponents(separator);
+    if (components.size() == 1) {
+      //  System.err.println("non separator for safety testing:" + separator);
+      //  throw new RuntimeException("non separator for safety testing:" + separator);
+      return false;
+    }
+    if (countMissings(separator) > MAX_MISSINGS) {
+      return false;
+    }
+    for (VertexSet compo: components) {
+      if (compo.equals(component)) {
+        continue;
+      }
+      VertexSet sep = g.neighborSet(compo);
+      VertexSet rest = g.all.subtract(sep).subtract(compo);
+      VertexSet[] contracts = findCliqueMinor(sep, rest);
+      if (contracts == null) {
+        return false;
+      }
+      if (CONFIRM_MINOR) {
+        confirmCliqueMinor(sep, rest, contracts);
+      }
+    }
+    return true;
+  }
+
+  private void addSteps(int s)
+      throws StepsExceededException {
+    steps += s;
+    if (steps > maxSteps) {
+      throw new StepsExceededException();
+    }
+  }
+
+  public int decideSafeness(VertexSet separator) {
+    return decideSafeness(separator, DEFAULT_MAX_STEPS);
+  }
+
+  public int decideSafeness(VertexSet separator, int maxSteps) {
+    try {
+      boolean b = isSafeSeparatorCounting(separator, maxSteps);
+      if (b) {
+        return steps + 1;
+      }
+      else {
+        return -(steps + 1);
+      }
+    } catch (StepsExceededException e) {
+      return -(steps + 1);
+    }
+  }
+
+  public boolean isSafeSeparator(VertexSet separator) {
+    return isSafeSeparator(separator, DEFAULT_MAX_STEPS);
+  }
+
+  public boolean isSafeSeparator(VertexSet separator, int maxSteps) {
+    try {
+      return isSafeSeparatorCounting(separator, maxSteps);
+    } catch (StepsExceededException e) {
+      return false;
+    }
+  }
+
+  public boolean isSafeSeparatorCounting(VertexSet separator, int maxSteps)
+    throws StepsExceededException {
+    //  System.out.println("isSafeSeparator " + separator);
+    this.maxSteps = maxSteps;
+    steps = 0;
     if(separator.cardinality() <= 2){
       return true;
     }
@@ -32,15 +121,12 @@ public class SafeSeparator {
       if(s.intersects(separator)){
         return true;
       }
-      s = g.neighborSet[separator.nextSetBit(first)];
-      if(s.intersects(separator)){
-        return true;
-      }
     }
     ArrayList<VertexSet> components = g.getComponents(separator);
     if (components.size() == 1) {
-      System.err.println("non separator for safety testing:" + separator);
-      throw new RuntimeException("non separator for safety testing:" + separator);
+      //  System.err.println("non separator for safety testing:" + separator);
+      //  throw new RuntimeException("non separator for safety testing:" + separator);
+      return false;
     }
     if (countMissings(separator) > MAX_MISSINGS) {
       return false;
@@ -146,7 +232,8 @@ public class SafeSeparator {
       this.left2 = left2;
     }
 
-    RightNode[] findCoveringPair() {
+    RightNode[] findCoveringPair()
+        throws StepsExceededException {
       for (RightNode rn1: rightNodeList) {
         if (rn1.neighborSet.get(left1.vertex) &&
             !rn1.neighborSet.get(left2.vertex)) {
@@ -162,7 +249,8 @@ public class SafeSeparator {
       return null;
     }
 
-    boolean isFinallyCovered() {
+    boolean isFinallyCovered()
+        throws StepsExceededException {
       for (RightNode rn: rightNodeList) {
         if (rn.finallyCovers(this)) {
           return true;
@@ -184,7 +272,8 @@ public class SafeSeparator {
       return sb.toString();
     }
   }
-  private VertexSet[] findCliqueMinor(VertexSet separator, VertexSet rest) {
+  private VertexSet[] findCliqueMinor(VertexSet separator, VertexSet rest)
+      throws StepsExceededException {
     int k = separator.cardinality();
     available = (VertexSet) rest.clone();
     leftNodes = new LeftNode[k];
@@ -257,6 +346,7 @@ public class SafeSeparator {
     }
 
     while (true) {
+
       MissingEdge zc = zeroCovered();
       if (zc == null) {
         break;
@@ -272,6 +362,10 @@ public class SafeSeparator {
 
     boolean moving = true;
     while (rightNodeList.size() > k/2 && moving) {
+      steps++;
+      if (steps > maxSteps) {
+        return null;
+      }
       moving = false;
       MissingEdge lc = leastCovered();
       if (lc == null) {
@@ -431,13 +525,14 @@ public class SafeSeparator {
     }
   }
 
-  int minCover() {
+  int minCover() throws StepsExceededException {
     int minCover = g.n;
     for (MissingEdge me: missingEdgeList) {
       if (me.isFinallyCovered()) {
         continue;
       }
       int nCover = 0;
+      addSteps(1);
       for (RightNode rn: rightNodeList) {
         if (rn.potentiallyCovers(me)) {
           nCover++;
@@ -450,7 +545,7 @@ public class SafeSeparator {
     return minCover;
   }
 
-  MissingEdge leastCovered() {
+  MissingEdge leastCovered() throws StepsExceededException {
     int minCover = 0;
     MissingEdge result = null;
     for (MissingEdge me: missingEdgeList) {
@@ -458,6 +553,7 @@ public class SafeSeparator {
         continue;
       }
       int nCover = 0;
+      addSteps(1);
       for (RightNode rn: rightNodeList) {
         if (rn.potentiallyCovers(me)) {
           nCover++;
@@ -471,9 +567,10 @@ public class SafeSeparator {
     return result;
   }
 
-  MissingEdge zeroCovered() {
+  MissingEdge zeroCovered() throws StepsExceededException {
     for (MissingEdge me: missingEdgeList) {
       int nCover = 0;
+      addSteps(1);
       for (RightNode rn: rightNodeList) {
         if (rn.potentiallyCovers(me)) {
           nCover++;
@@ -486,9 +583,11 @@ public class SafeSeparator {
     return null;
   }
 
-  boolean connectable(VertexSet vs1, VertexSet vs2) {
+  boolean connectable(VertexSet vs1, VertexSet vs2)
+      throws StepsExceededException {
     VertexSet vs = (VertexSet) vs1.clone();
     while (true) {
+      addSteps(1);
       VertexSet ns = g.neighborSet(vs);
       if (ns.intersects(vs2)) {
         return true;
@@ -549,11 +648,6 @@ public class SafeSeparator {
     return count / 2;
   }
 
-  private static void test() {
+  private static class StepsExceededException extends Exception {
   }
-
-  public static void main(String[] args) {
-    test();
-  }
-
 }
