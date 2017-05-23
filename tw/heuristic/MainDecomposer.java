@@ -362,8 +362,6 @@ public class MainDecomposer{
           break;
         }
         refresh(bag, maxBag, Math.max(gdVS, Math.max(pdVS, tdVS)) + 30);
-        comment("refreshed");
-        comment("new width = " + bag.getWidth());
         break;
       }
     }
