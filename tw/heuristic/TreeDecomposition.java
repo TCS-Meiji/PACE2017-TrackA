@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Hisao Tamaki
+ * Copyright (c) 2016, Hisao Tamaki and Hiromu Ohtsuka
  */
 package tw.heuristic;
 

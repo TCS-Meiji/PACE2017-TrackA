@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hiromu Ohtsuka
+*/
+
 package tw.heuristic;
 
 import java.util.Set;

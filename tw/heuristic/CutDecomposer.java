@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Keitaro Makii and Hiromu Ohtsuka
+*/
+
 package tw.heuristic;
 
 import java.util.ArrayList;

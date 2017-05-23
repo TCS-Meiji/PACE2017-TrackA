@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Takuto Sato and Hiromu Ohtsuka
+*/
+
 package tw.heuristic;
 
 import java.io.File;
