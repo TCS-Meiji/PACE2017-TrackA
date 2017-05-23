@@ -131,12 +131,14 @@ public class Bag implements Cloneable{
         max = w;
       }
     }
+    /*
     for (Separator separator: separators) {
       int w = separator.vertexSet.cardinality();
       if (w > max) {
         max = w;
       }
     }
+    */
     return max;
 
   }
