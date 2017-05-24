@@ -11,6 +11,7 @@ public class CutDecomposer{
   public static final int LN = 2000;
   public static final int HN = 100000;
   public static final int HM = 1000000;
+  public static final int ONET = 400000;
   public static final int STEP = 1000;
   public static final long DEFAULTMAXSTEP = 500000;
   public static int now;
@@ -51,6 +52,10 @@ public class CutDecomposer{
   public boolean decompose(long timeMS){
     abort = false;
     count = 0;
+    if(whole.graph.n > ONET){
+      return true;
+    }
+
     decomposeWithOneCuts();
     if(getTimeMS() > timeMS){
       whole.flatten();
@@ -426,43 +431,7 @@ public class CutDecomposer{
     return abort;
   }
 
-  static private void printTreeWidth(Bag b){
-    endTime = System.currentTimeMillis();
-    System.out.print("," + b.width + "," + ((endTime-startTime)));
-  }
-
-  static long startTime;
-  static long endTime;
-
   public static void main(String[] args){
-    Graph graph = Graph.readGraph(System.in);
 
-    Bag whole = new Bag(graph);
-
-    if(true){
-      startTime = System.currentTimeMillis();
-    }
-
-    CutDecomposer mtd = new CutDecomposer(whole);
-    mtd.decompose(1000000);
-
-    System.out.println(whole.width);
-    if(true){
-      printTreeWidth(whole);
-      System.out.println();
-    }
-
-    System.out.println(mtd.getTimeMS());
-
-    /*
-    for(Bag b : whole.nestedBags){
-      if(b.graph.n > 100){
-        System.out.println(b.graph.n);
-        for(int i=0;i<b.graph.n;i++){
-          System.out.println(b.graph.degree[i]);
-        }
-      }
-    }
-    */
   }
 }
