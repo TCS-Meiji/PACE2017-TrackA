@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hiromu Otsuka
+*/
+
 package tw.heuristic;
 
 public class Unsigned{

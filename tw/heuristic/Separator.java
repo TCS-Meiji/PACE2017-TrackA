@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, Hisao Tamaki and Hiromu Ohtsuka, Keitaro Makii
+*/
+
 package tw.heuristic;
 
 import java.util.ArrayList;
@@ -14,6 +18,7 @@ public class Separator implements Cloneable{
 	boolean wall;
 
 	int[] parentVertex;
+	int safeSteps;
 
 	public Separator(Bag parent) {
 		this.parent = parent;
@@ -74,7 +79,13 @@ public class Separator implements Cloneable{
 	public boolean isSafe() {
 		SafeSeparator ss = new SafeSeparator(parent.graph);
 		//return isSafeBySPT();
-		return ss.isSafeSeparator(vertexSet);
+		safeSteps = ss.decideSafeness(vertexSet);
+		return safeSteps > 0;
+		//return ss.isSafeSeparator(vertexSet);
+	}
+
+	public int getSteps(){
+	  return Math.abs(safeSteps);
 	}
 
 	public boolean isSafeBySPT() {
